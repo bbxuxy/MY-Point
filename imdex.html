@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Study Record</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Kanit', sans-serif; background: #f0f4f8; }
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div id="loginPage" class="fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 z-50">
+    <h1 class="text-6xl font-bold text-white mb-8 animate-bounce">Welcome</h1>
+    <div class="bg-white p-8 rounded-2xl shadow-2xl w-80 text-center">
+        <input type="password" id="passInput" placeholder="ใส่รหัสผ่าน" class="w-full p-3 border rounded-xl mb-4 text-center outline-none focus:ring-2 focus:ring-purple-400">
+        <button onclick="checkLogin()" class="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 transition">เข้าสู่ระบบ</button>
+    </div>
+</div>
+
+<div id="appContent" class="hidden">
+    <nav class="bg-white shadow-md sticky top-0 z-40">
+        <div class="flex justify-around p-4 font-semibold text-gray-600">
+            <button onclick="showPage('home')" class="hover:text-blue-500">หน้าหลัก</button>
+            <button onclick="showPage('history')" class="hover:text-blue-500">ประวัติการเรียนรู้</button>
+            <button onclick="showPage('stats')" class="hover:text-blue-500">สถิติปัจจุบันรายวิชา</button>
+        </div>
+    </nav>
+
+    <section id="homePage" class="p-6 fade-in">
+        <div class="max-w-4xl mx-auto">
+            <div class="bg-white p-6 rounded-3xl shadow-lg mb-8">
+                <h2 class="text-xl font-bold mb-4 text-gray-700">กราฟความพัฒนา</h2>
+                <canvas id="growthChart" height="150"></canvas>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <button onclick="openModal('วิทยาศาสตร์')" class="p-8 bg-blue-100 text-blue-700 rounded-3xl font-bold text-xl shadow-sm hover:shadow-md transition border-2 border-blue-200">วิทยาศาสตร์</button>
+                <button onclick="openModal('คณิตศาสตร์')" class="p-8 bg-red-100 text-red-700 rounded-3xl font-bold text-xl shadow-sm hover:shadow-md transition border-2 border-red-200">คณิตศาสตร์</button>
+                <button onclick="openModal('วิชาอื่นๆ')" class="p-8 bg-green-100 text-green-700 rounded-3xl font-bold text-xl shadow-sm hover:shadow-md transition border-2 border-green-200">วิชาอื่นๆ</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="historyPage" class="p-6 hidden fade-in">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">ประวัติการเรียนรู้</h2>
+            <div id="historyList" class="space-y-4">
+                </div>
+        </div>
+    </section>
+
+    <section id="statsPage" class="p-6 hidden fade-in text-center">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">สถิติรวม</h2>
+        <p class="text-gray-500 italic">ฟีเจอร์สถิติรวมกำลังประมวลผล...</p>
+    </section>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDEltidKLziMozc1j2luq2Tg53vexbcVIw",
+        authDomain: "my-point-b913e.firebaseapp.com",
+        projectId: "my-point-b913e",
+        storageBucket: "my-point-b913e.firebasestorage.app",
+        messagingSenderId: "350675489573",
+        appId: "1:350675489573:web:1dbff25a03710071a640cc",
+        databaseURL: "https://my-point-b913e-default-rtdb.firebaseio.com/"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Login Function
+    window.checkLogin = () => {
+        const pass = document.getElementById('passInput').value;
+        if(pass === '18112012') {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('appContent').classList.remove('hidden');
+            loadData();
+        } else {
+            Swal.fire('รหัสผ่านไม่ถูกต้อง', 'ลองใหม่อีกครั้งนะ', 'error');
+        }
+    };
+
+    // Navigation
+    window.showPage = (pageId) => {
+        ['homePage', 'historyPage', 'statsPage'].forEach(id => {
+            document.getElementById(id).classList.add('hidden');
+        });
+        document.getElementById(pageId + 'Page').classList.remove('hidden');
+    };
+
+    // Modal & Data Entry
+    window.openModal = async (subject) => {
+        const { value: formValues } = await Swal.fire({
+            title: `บันทึกคะแนน: ${subject}`,
+            html:
+                '<input id="swal-input1" class="swal2-input" placeholder="บทเรียน">' +
+                '<input id="swal-input2" type="number" class="swal2-input" placeholder="จำนวนข้อ">' +
+                '<input id="swal-input3" type="number" class="swal2-input" placeholder="คะแนนที่ได้">',
+            focusConfirm: false,
+            confirmButtonText: 'บันทึกข้อมูล',
+            preConfirm: () => {
+                return [
+                    document.getElementById('swal-input1').value,
+                    document.getElementById('swal-input2').value,
+                    document.getElementById('swal-input3').value
+                ]
+            }
+        });
+
+        if (formValues && formValues[0]) {
+            const [lesson, total, score] = formValues;
+            push(ref(db, 'records/'), {
+                subject, lesson, total, score, date: new Date().toLocaleDateString()
+            });
+            Swal.fire('สำเร็จ!', 'บันทึกข้อมูลเรียบร้อยแล้ว', 'success');
+        }
+    };
+
+    // Load & Render Data
+    function loadData() {
+        onValue(ref(db, 'records/'), (snapshot) => {
+            const data = snapshot.val();
+            const historyDiv = document.getElementById('historyList');
+            historyDiv.innerHTML = '';
+            
+            let chartData = { 'วิทยาศาสตร์': [], 'คณิตศาสตร์': [], 'วิชาอื่นๆ': [] };
+
+            if(data) {
+                Object.values(data).reverse().forEach(item => {
+                    // History List
+                    const card = `
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-blue-400">
+                            <div class="flex justify-between font-bold text-gray-700">
+                                <span>${item.subject}: ${item.lesson}</span>
+                                <span class="text-blue-500">${item.score}/${item.total}</span>
+                            </div>
+                            <div class="text-sm text-gray-400">${item.date}</div>
+                        </div>
+                    `;
+                    historyDiv.innerHTML += card;
+                    
+                    // Prep Chart Data
+                    if(chartData[item.subject]) chartData[item.subject].push(item.score);
+                });
+                updateChart(chartData);
+            }
+        });
+    }
+
+    // Chart Update
+    let myChart;
+    function updateChart(records) {
+        const ctx = document.getElementById('growthChart').getContext('2d');
+        if(myChart) myChart.destroy();
+        
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['ครั้งที่ 1', 'ครั้งที่ 2', 'ครั้งที่ 3', 'ครั้งที่ 4', 'ครั้งที่ 5'],
+                datasets: [
+                    { label: 'วิทย์', data: records['วิทยาศาสตร์'].slice(-5), borderColor: '#3b82f6', tension: 0.3 },
+                    { label: 'คณิต', data: records['คณิตศาสตร์'].slice(-5), borderColor: '#ef4444', tension: 0.3 },
+                    { label: 'อื่นๆ', data: records['วิชาอื่นๆ'].slice(-5), borderColor: '#10b981', tension: 0.3 }
+                ]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+</script>
+
+</body>
+</html>
